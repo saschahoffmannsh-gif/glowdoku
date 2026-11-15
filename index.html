@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#070b1a">
+<title>GlowDoku – Glühwürmchen-Rätsel</title>
+<style>
+  :root {
+    --bg1: #0b1430; --bg2: #04060f; --glow: #f6ff8a; --glow2: #c8ff4d;
+    --text: #e8ecff; --muted: #8e98c4; --bad: #ff5d6c; --cell-gap: 3px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    background: radial-gradient(ellipse at 50% 0%, #1b2a5c 0%, var(--bg1) 35%, var(--bg2) 100%);
+    overflow-x: hidden; user-select: none; -webkit-user-select: none;
+    min-height: 100vh;
+  }
+  /* sky + forest */
+  #sky { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  .star { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #fff; opacity: .6; animation: twinkle 4s infinite ease-in-out; }
+  @keyframes twinkle { 0%,100% { opacity: .15 } 50% { opacity: .8 } }
+  #forest { position: fixed; left: 0; right: 0; bottom: 0; height: 22vh; z-index: 0; pointer-events: none; }
+  .ambient { position: fixed; width: 6px; height: 6px; border-radius: 50%; background: var(--glow);
+    box-shadow: 0 0 8px 3px rgba(230,255,120,.7); z-index: 0; pointer-events: none; animation: drift 14s infinite ease-in-out, blink 3s infinite ease-in-out; }
+  @keyframes drift { 0% { transform: translate(0,0) } 25% { transform: translate(30px,-40px) } 50% { transform: translate(-20px,-80px) } 75% { transform: translate(-40px,-30px) } 100% { transform: translate(0,0) } }
+  @keyframes blink { 0%,100% { opacity: .1 } 40%,60% { opacity: 1 } }
+
+  main { position: relative; z-index: 1; max-width: 560px; margin: 0 auto; padding: 14px 14px 40px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  h1 { margin: 0; font-size: 28px; letter-spacing: .5px; font-weight: 800;
+    background: linear-gradient(90deg, #f6ff8a, #9dffb0); -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 18px rgba(230,255,120,.25); }
+  .iconbtn { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); color: var(--text);
+    border-radius: 12px; padding: 8px 12px; font-size: 15px; cursor: pointer; }
+  .iconbtn:active { transform: scale(.96); }
+  .status { display: flex; justify-content: space-between; align-items: center; margin: 12px 2px 10px; color: var(--muted); font-size: 15px; }
+  .status b { color: var(--text); }
+  .count .fly-mini { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--glow); box-shadow: 0 0 6px 2px rgba(230,255,120,.7); margin-right: 6px; vertical-align: middle; }
+
+  #board { display: grid; gap: 0; width: 100%; aspect-ratio: 1; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 0 0 2px rgba(255,255,255,.15), 0 10px 40px rgba(0,0,0,.6); touch-action: none; position: relative; }
+  .cell { position: relative; min-width: 0; min-height: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    border-right: 1px solid rgba(0,0,0,.25); border-bottom: 1px solid rgba(0,0,0,.25); transition: filter .15s; }
+  .cell.bt { border-top: 3px solid #050814; } .cell.bl { border-left: 3px solid #050814; }
+  .cell.bb { border-bottom: 3px solid #050814; } .cell.br { border-right: 3px solid #050814; }
+  .cell:hover { filter: brightness(1.15); }
+  .cell .x { color: rgba(10,12,30,.65); font-weight: 900; font-size: calc(var(--cs) * .38); line-height: 1; }
+  .cell.conflict { box-shadow: inset 0 0 0 3px var(--bad); }
+  .cell.hintflash { animation: hintflash 1.2s ease-in-out 2; }
+  @keyframes hintflash { 50% { box-shadow: inset 0 0 0 4px #fff, inset 0 0 20px rgba(255,255,255,.6); } }
+
+  /* firefly */
+  .fly { width: 90%; height: 90%; position: absolute; left: 5%; top: 5%; pointer-events: none; animation: pop .25s ease-out; }
+  .fly svg { width: 100%; height: 100%; overflow: visible; }
+  .fly .halo { position: absolute; inset: 8%; border-radius: 50%;
+    background: radial-gradient(circle at 50% 62%, rgba(246,255,138,.95) 0%, rgba(200,255,77,.45) 30%, rgba(200,255,77,0) 68%);
+    animation: pulse 2.2s infinite ease-in-out; }
+  .fly .abdomen { animation: bodyglow 2.2s infinite ease-in-out; }
+  .fly .wing { transform-origin: 50% 45%; animation: flap .18s infinite alternate ease-in-out; }
+  .fly .wing.r { animation-delay: .09s; }
+  @keyframes pulse { 0%,100% { transform: scale(.9); opacity: .75 } 50% { transform: scale(1.25); opacity: 1 } }
+  @keyframes bodyglow { 0%,100% { fill: #d9f55a } 50% { fill: #fbffb0 } }
+  @keyframes flap { from { transform: rotate(-6deg) } to { transform: rotate(6deg) } }
+  @keyframes pop { from { transform: scale(.2); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+  .cell.conflict .fly .halo { background: radial-gradient(circle at 50% 62%, rgba(255,120,130,.95) 0%, rgba(255,80,100,.4) 35%, rgba(255,80,100,0) 70%); }
+  .cell.conflict .fly .abdomen { animation: none; fill: #ff7d8a; }
+  .cell.hinted::after { content: ""; position: absolute; right: 4px; top: 4px; width: 6px; height: 6px; border-radius: 50%; background: #9dd7ff; box-shadow: 0 0 6px #9dd7ff; }
+
+  .toolbar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+  .toolbar button { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); color: var(--text);
+    border-radius: 14px; padding: 10px 4px; font-size: 13px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .toolbar button span { font-size: 20px; }
+  .toolbar button:active { transform: scale(.96); }
+  .msg { min-height: 22px; text-align: center; margin-top: 10px; color: var(--muted); font-size: 14px; }
+  .hint-text { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 8px; opacity: .8; }
+
+  /* overlays */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center;
+    background: rgba(3,5,14,.72); backdrop-filter: blur(4px); padding: 16px; }
+  .overlay.show { display: flex; }
+  .panel { background: linear-gradient(180deg, #16204a, #0b1129); border: 1px solid rgba(255,255,255,.12); border-radius: 20px;
+    padding: 20px; width: 100%; max-width: 440px; max-height: 88vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  .panel h2 { margin: 0 0 12px; font-size: 22px; }
+  .panel p, .panel li { color: #c7cdf0; line-height: 1.45; font-size: 15px; }
+  .panel ul { padding-left: 20px; }
+  .primary { background: linear-gradient(90deg, #e9ff6b, #8dffb0); color: #10162f; border: 0; border-radius: 14px; padding: 12px 18px;
+    font-weight: 800; font-size: 16px; cursor: pointer; box-shadow: 0 0 20px rgba(220,255,120,.35); }
+  .secondary { background: transparent; color: var(--text); border: 1px solid rgba(255,255,255,.2); border-radius: 14px; padding: 11px 16px; font-size: 15px; cursor: pointer; }
+  .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+  .levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; }
+  .lvl { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 10px 4px; color: var(--text);
+    cursor: pointer; text-align: center; font-size: 18px; font-weight: 700; }
+  .lvl small { display: block; font-size: 11px; color: var(--muted); font-weight: 500; margin-top: 2px; }
+  .lvl.done { border-color: rgba(220,255,120,.6); box-shadow: 0 0 12px rgba(220,255,120,.25); }
+  .lvl.current { outline: 2px solid #9dffb0; }
+  .sizes { display: flex; gap: 8px; flex-wrap: wrap; }
+  #win .panel { text-align: center; }
+  .bigfly { position: relative; width: 90px; height: 90px; margin: 0 auto 6px; }
+  .celebrate { position: fixed; z-index: 9; width: 10px; height: 10px; border-radius: 50%; background: var(--glow);
+    box-shadow: 0 0 12px 5px rgba(230,255,120,.8); pointer-events: none; animation: rise 2.6s ease-out forwards; }
+  @keyframes rise { 0% { transform: translate(0,0) scale(.6); opacity: 1 } 100% { transform: translate(var(--dx), var(--dy)) scale(1.2); opacity: 0 } }
+  #board.won .cell { animation: wonglow 1.2s ease-in-out 2; }
+  @keyframes wonglow { 50% { filter: brightness(1.5) saturate(1.3); } }
+</style>
+</head>
+<body>
+<div id="sky"></div>
+<svg id="forest" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden="true">
+  <path fill="#03050c" d="M0 200 L0 120 L30 60 L55 120 L70 90 L95 40 L120 110 L140 80 L170 20 L200 115 L230 70 L255 120 L280 50 L310 120 L340 85 L365 30 L395 118 L420 75 L450 125 L480 45 L510 120 L535 90 L560 35 L590 120 L620 70 L650 125 L680 40 L710 118 L735 80 L765 25 L795 120 L820 85 L850 125 L880 50 L910 118 L935 75 L965 35 L1000 110 L1000 200 Z"/>
+</svg>
+
+<main>
+  <header>
+    <h1>GlowDoku</h1>
+    <div style="display:flex; gap:8px">
+      <button class="iconbtn" id="btnLevels" title="Level wählen">☰ Level</button>
+      <button class="iconbtn" id="btnHelp" title="Regeln">?</button>
+    </div>
+  </header>
+  <div class="status">
+    <div id="levelLabel">Level 1</div>
+    <div class="count"><span class="fly-mini"></span><b id="flyCount">0</b> / <span id="flyTotal">5</span></div>
+    <div>⏱ <b id="timer">0:00</b></div>
+  </div>
+  <div id="board"></div>
+  <div class="msg" id="msg"></div>
+  <div class="toolbar">
+    <button id="btnUndo"><span>↶</span>Zurück</button>
+    <button id="btnHint"><span>💡</span>Tipp</button>
+    <button id="btnReset"><span>⟲</span>Neustart</button>
+    <button id="btnNext"><span>➜</span>Weiter</button>
+  </div>
+  <div class="hint-text">Tippen: leer → ✕ → Glühwürmchen · Gedrückt halten / Rechtsklick: ✕ · Wischen: mehrere ✕</div>
+</main>
+
+<div class="overlay" id="help">
+  <div class="panel">
+    <h2>So wird gespielt ✨</h2>
+    <p>Setze die Glühwürmchen so, dass</p>
+    <ul>
+      <li>in jeder <b>Zeile</b> genau ein Glühwürmchen leuchtet,</li>
+      <li>in jeder <b>Spalte</b> genau eines,</li>
+      <li>in jedem <b>Farbfeld</b> (Lichtung) genau eines,</li>
+      <li>und sich zwei Glühwürmchen <b>nie berühren</b> – auch nicht diagonal.</li>
+    </ul>
+    <p><b>Steuerung:</b> Tippe auf ein Feld, um es mit ✕ als „hier nicht“ zu markieren. Tippe nochmal, um ein Glühwürmchen zu setzen, ein drittes Mal zum Leeren. Gedrückt halten oder Rechtsklick setzt direkt ein ✕, Wischen markiert mehrere Felder.</p>
+    <p>Regelverstöße leuchten rot. Jedes Rätsel hat genau eine Lösung – raten ist nie nötig!</p>
+    <div class="row"><button class="primary" data-close>Los geht's!</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="levelsOv">
+  <div class="panel">
+    <h2>Level wählen</h2>
+    <div class="levels" id="levelGrid"></div>
+    <h2 style="margin-top:18px; font-size:18px">Zufälliges Rätsel</h2>
+    <div class="sizes" id="randomSizes"></div>
+    <div class="row"><button class="secondary" data-close>Schließen</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="win">
+  <div class="panel">
+    <div class="bigfly" id="winFly"></div>
+    <h2>Die Nacht leuchtet! 🌙</h2>
+    <p id="winText"></p>
+    <div class="row">
+      <button class="secondary" id="winLevels">Levels</button>
+      <button class="primary" id="winNext">Nächstes Level ➜</button>
+    </div>
+  </div>
+</div>
+
+<script id="engine">
+// GlowDoku engine: solver + generator (works in browser and node)
+(function (root) {
+  // regions: array of N strings, each char = region id (a..z)
+  function parse(rows) {
+    const N = rows.length;
+    const reg = rows.map(r => r.split('').map(ch => ch.charCodeAt(0) - 97));
+    return { N, reg };
+  }
+  // count solutions up to `limit`; returns {count, solution}
+  function solve(rows, limit = 2) {
+    const { N, reg } = parse(rows);
+    let count = 0, first = null;
+    const pos = new Array(N);
+    function rec(r, colMask, regMask) {
+      if (count >= limit) return;
+      if (r === N) { count++; if (!first) first = pos.slice(); return; }
+      for (let c = 0; c < N; c++) {
+        if (colMask & (1 << c)) continue;
+        const g = reg[r][c];
+        if (regMask & (1 << g)) continue;
+        if (r > 0 && Math.abs(pos[r - 1] - c) <= 1) continue;
+        pos[r] = c;
+        rec(r + 1, colMask | (1 << c), regMask | (1 << g));
+      }
+    }
+    rec(0, 0, 0);
+    return { count, solution: first };
+  }
+  function validate(rows) {
+    const { N, reg } = parse(rows);
+    const ids = new Set();
+    for (const row of reg) { if (row.length !== N) return 'row length'; row.forEach(g => ids.add(g)); }
+    if (ids.size !== N) return 'region count ' + ids.size;
+    // connectivity
+    for (const g of ids) {
+      const cells = [];
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (reg[r][c] === g) cells.push([r, c]);
+      const seen = new Set([cells[0].join()]); const st = [cells[0]];
+      while (st.length) { const [r, c] = st.pop(); for (const [dr, dc] of [[1,0],[-1,0],[0,1],[0,-1]]) { const rr=r+dr, cc=c+dc; if (rr>=0&&rr<N&&cc>=0&&cc<N&&reg[rr][cc]===g&&!seen.has(rr+','+cc)) { seen.add(rr+','+cc); st.push([rr,cc]); } } }
+      if (seen.size !== cells.length) return 'region ' + g + ' not connected';
+    }
+    return null;
+  }
+  function rng(seed) { let s = seed >>> 0 || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
+  function shuffle(a, rand) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function randomPlacement(N, rand) {
+    const pos = [];
+    function rec(r, used) {
+      if (r === N) return true;
+      for (const c of shuffle([...Array(N).keys()], rand)) {
+        if (used & (1 << c)) continue;
+        if (r > 0 && Math.abs(pos[r - 1] - c) <= 1) continue;
+        pos[r] = c; if (rec(r + 1, used | (1 << c))) return true;
+      }
+      return false;
+    }
+    return rec(0, 0) ? pos : null;
+  }
+  function toRows(grid) { return grid.map(row => row.map(g => String.fromCharCode(97 + g)).join('')); }
+  // generate a puzzle with a unique solution
+  function generate(N, seed) {
+    const rand = rng(seed || (Math.random() * 2 ** 32));
+    for (let attempt = 0; attempt < 400; attempt++) {
+      const pos = randomPlacement(N, rand);
+      const grid = Array.from({ length: N }, () => Array(N).fill(-1));
+      const frontier = [];
+      pos.forEach((c, r) => { grid[r][c] = r; });
+      let filled = N;
+      // random growth
+      while (filled < N * N) {
+        const r = Math.floor(rand() * N), c = Math.floor(rand() * N);
+        if (grid[r][c] !== -1) continue;
+        const nb = [[1,0],[-1,0],[0,1],[0,-1]].map(([dr,dc]) => [r+dr,c+dc]).filter(([rr,cc]) => rr>=0&&rr<N&&cc>=0&&cc<N&&grid[rr][cc]!==-1);
+        if (!nb.length) continue;
+        const [rr, cc] = nb[Math.floor(rand() * nb.length)];
+        grid[r][c] = grid[rr][cc]; filled++;
+      }
+      // hill-climb: move border cells between regions to reduce solution count
+      let best = solve(toRows(grid), 50).count;
+      for (let it = 0; it < 600 && best > 1; it++) {
+        const r = Math.floor(rand() * N), c = Math.floor(rand() * N);
+        if (pos[r] === c) continue; // keep seeds
+        const nb = [[1,0],[-1,0],[0,1],[0,-1]].map(([dr,dc]) => [r+dr,c+dc]).filter(([rr,cc]) => rr>=0&&rr<N&&cc>=0&&cc<N&&grid[rr][cc]!==grid[r][c]);
+        if (!nb.length) continue;
+        const [rr, cc] = nb[Math.floor(rand() * nb.length)];
+        const old = grid[r][c]; grid[r][c] = grid[rr][cc];
+        const rows = toRows(grid);
+        if (validate(rows)) { grid[r][c] = old; continue; }
+        const cnt = solve(rows, 50).count;
+        if (cnt >= 1 && cnt <= best) best = cnt; else grid[r][c] = old;
+      }
+      if (best === 1) {
+        // relabel regions by first appearance for nicer colors
+        const rows = toRows(grid); const map = {}; let k = 0;
+        const out = rows.map(row => row.split('').map(ch => (map[ch] ??= String.fromCharCode(97 + k++))).join(''));
+        return out;
+      }
+    }
+    return null;
+  }
+  const api = { solve, validate, generate, parse };
+  if (typeof module !== 'undefined') module.exports = api; else root.GlowEngine = api;
+})(this);
+
+</script>
+<script>
+const LEVELS = [["abbbb","aabbc","debbc","deebc","ddccc"],["aaabb","cdaad","cdddd","cdddd","ceddd"],["aaaab","caaad","ccddd","ccddd","eeddd"],["aaaaaa","bcaaaa","bccadd","bccccd","efcddd","eeeedd"],["aaabbc","aabbdd","eaabdd","eadddd","eadffd","eeeddd"],["aabbbb","ccbbbd","ccccdd","cccdde","ffccce","feeeee"],["aabbbbb","acccbbb","aacddbd","aaceddd","fafdddd","fffdddd","fffffdg"],["aaabccc","abbbddc","abbbecc","bbeeeec","beeeccc","bbfeecc","bfffeeg"],["aaabcbb","aadbbbb","dddbbbd","dddbddd","eeddddd","eedfggg","eddgggg"],["aaaaaabb","cadaebbb","ddddeebb","dddeebbf","ddeeeebf","deeeegff","ddhegggg","deeeeegg"],["aaaaaaab","ccabdbbb","cccbbbbb","cccebbfb","cccebbff","cccbbbfb","ggcbbbbb","gghhhbbb"],["aabbbbbc","adbeeeee","addeeeff","dddghehf","gdgghhhf","gggghfff","gggfffff","gggggggf"],["aaaaaabbb","aacaabbbb","cacbbbdbb","ccccbddde","cffcddeee","cffcddggg","cfccffghg","cffcffghg","iiffffhhh"],["aaaabcccc","abbbbcdee","abccbceee","abaccccee","abaceecce","aaafeeeee","ggaffhhee","gaaaffhhi","ggggfffhi"]];
+const COLORS = ['#3f6f8f','#5b8a4a','#8a5a8f','#a8743f','#3f8a83','#6a5fa8','#9a4f5f','#7b8a3a','#4a6fb0','#8f7a5a'];
+const FLY_SVG = `<div class="halo"></div><svg viewBox="0 0 100 100">
+  <ellipse class="wing l" cx="36" cy="38" rx="16" ry="24" fill="rgba(200,225,255,.35)" stroke="rgba(220,235,255,.5)" stroke-width="1.5" transform="rotate(-25 36 38)"/>
+  <ellipse class="wing r" cx="64" cy="38" rx="16" ry="24" fill="rgba(200,225,255,.35)" stroke="rgba(220,235,255,.5)" stroke-width="1.5" transform="rotate(25 64 38)"/>
+  <ellipse cx="50" cy="40" rx="11" ry="14" fill="#2a2440"/>
+  <circle cx="50" cy="24" r="9" fill="#3a2f52"/>
+  <circle cx="46" cy="22" r="2.4" fill="#fff"/><circle cx="54" cy="22" r="2.4" fill="#fff"/>
+  <circle cx="46.5" cy="22.5" r="1.2" fill="#111"/><circle cx="54.5" cy="22.5" r="1.2" fill="#111"/>
+  <path d="M45 16 Q40 6 34 8 M55 16 Q60 6 66 8" stroke="#3a2f52" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <ellipse class="abdomen" cx="50" cy="64" rx="13" ry="17" fill="#d9f55a"/>
+  <path d="M40 58 H60 M39 66 H61 M41 74 H59" stroke="rgba(120,140,20,.35)" stroke-width="1.5"/>
+</svg>`;
+
+const $ = s => document.querySelector(s);
+const store = JSON.parse(localStorage.getItem('glowdoku') || '{}');
+store.solved = store.solved || {}; store.best = store.best || {};
+const save = () => localStorage.setItem('glowdoku', JSON.stringify(store));
+
+let level = 0, puzzle, N, reg, state, solution, history = [], startTime = 0, timerId = null, won = false, isRandom = false, hinted = new Set();
+
+function loadPuzzle(rows, idx, random = false) {
+  puzzle = rows; N = rows.length; isRandom = random; level = idx;
+  reg = rows.map(r => [...r].map(ch => ch.charCodeAt(0) - 97));
+  state = Array.from({ length: N }, () => Array(N).fill(0)); // 0 leer, 1 X, 2 Glühwürmchen
+  solution = GlowEngine.solve(rows, 1).solution;
+  history = []; won = false; hinted = new Set();
+  $('#levelLabel').innerHTML = random ? `Zufall <b>${N}×${N}</b>` : `Level <b>${idx + 1}</b> · ${N}×${N}`;
+  $('#flyTotal').textContent = N;
+  $('#msg').textContent = '';
+  $('#board').classList.remove('won');
+  buildBoard(); render();
+  startTime = Date.now(); clearInterval(timerId); timerId = setInterval(tick, 500); tick();
+  if (!random) { store.current = idx; save(); }
+}
+function tick() { if (won) return; const s = Math.floor((Date.now() - startTime) / 1000); $('#timer').textContent = fmt(s); }
+const fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+function buildBoard() {
+  const b = $('#board'); b.innerHTML = '';
+  b.style.gridTemplateColumns = `repeat(${N}, minmax(0, 1fr))`;
+  b.style.gridTemplateRows = `repeat(${N}, minmax(0, 1fr))`;
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const d = document.createElement('div'); d.className = 'cell'; d.dataset.r = r; d.dataset.c = c;
+    d.style.background = COLORS[reg[r][c] % COLORS.length];
+    if (r === 0 || reg[r - 1][c] !== reg[r][c]) d.classList.add('bt');
+    if (c === 0 || reg[r][c - 1] !== reg[r][c]) d.classList.add('bl');
+    if (r === N - 1) d.classList.add('bb');
+    if (c === N - 1) d.classList.add('br');
+    b.appendChild(d);
+  }
+  requestAnimationFrame(() => b.style.setProperty('--cs', (b.clientWidth / N) + 'px'));
+}
+function cellEl(r, c) { return $('#board').children[r * N + c]; }
+
+function conflicts() {
+  const bad = new Set(); const flies = [];
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (state[r][c] === 2) flies.push([r, c]);
+  for (let i = 0; i < flies.length; i++) for (let j = i + 1; j < flies.length; j++) {
+    const [a, b] = flies[i], [c, d] = flies[j];
+    if (a === c || b === d || reg[a][b] === reg[c][d] || (Math.abs(a - c) <= 1 && Math.abs(b - d) <= 1)) { bad.add(a + ',' + b); bad.add(c + ',' + d); }
+  }
+  return { bad, flies };
+}
+function render() {
+  const { bad, flies } = conflicts();
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const el = cellEl(r, c), v = state[r][c], cur = el.dataset.v | 0;
+    if (cur !== v) {
+      el.innerHTML = v === 1 ? '<span class="x">✕</span>' : v === 2 ? `<div class="fly">${FLY_SVG}</div>` : '';
+      el.dataset.v = v;
+    }
+    el.classList.toggle('conflict', bad.has(r + ',' + c));
+    el.classList.toggle('hinted', hinted.has(r + ',' + c) && v === 2);
+  }
+  $('#flyCount').textContent = flies.length;
+  $('#msg').textContent = bad.size ? 'Diese Glühwürmchen stören sich gegenseitig …' : '';
+  if (!won && flies.length === N && bad.size === 0) onWin();
+}
+function setCell(r, c, v, record = true) {
+  if (won || state[r][c] === v) return;
+  if (record) history.push([r, c, state[r][c]]);
+  state[r][c] = v;
+}
+
+// --- input: tap cycle, long-press / right-click X, drag to mark X
+let ptr = null;
+const boardEl = $('#board');
+function cellFromPoint(x, y) { const el = document.elementFromPoint(x, y); return el && el.closest && el.closest('.cell'); }
+boardEl.addEventListener('contextmenu', e => e.preventDefault());
+boardEl.addEventListener('pointerdown', e => {
+  const el = e.target.closest('.cell'); if (!el || won) return;
+  const r = +el.dataset.r, c = +el.dataset.c;
+  if (e.button === 2) { setCell(r, c, state[r][c] === 1 ? 0 : 1); render(); return; }
+  ptr = { r, c, drag: false, long: false, mode: state[r][c] === 1 ? 0 : 1, visited: new Set([r + ',' + c]) };
+  ptr.timer = setTimeout(() => { if (ptr && !ptr.drag) { ptr.long = true; if (state[r][c] !== 2) { setCell(r, c, state[r][c] === 1 ? 0 : 1); render(); } navigator.vibrate && navigator.vibrate(15); } }, 450);
+});
+boardEl.addEventListener('pointermove', e => {
+  if (!ptr || ptr.long) return;
+  const el = cellFromPoint(e.clientX, e.clientY); if (!el) return;
+  const r = +el.dataset.r, c = +el.dataset.c, k = r + ',' + c;
+  if (ptr.visited.has(k)) return;
+  if (!ptr.drag) { ptr.drag = true; clearTimeout(ptr.timer); applyDrag(ptr.r, ptr.c); }
+  ptr.visited.add(k); applyDrag(r, c); render();
+});
+function applyDrag(r, c) { if (state[r][c] !== 2) setCell(r, c, ptr.mode); }
+window.addEventListener('pointerup', () => {
+  if (!ptr) return; clearTimeout(ptr.timer);
+  if (!ptr.drag && !ptr.long) { const { r, c } = ptr; setCell(r, c, (state[r][c] + 1) % 3); render(); }
+  if (ptr.drag) render();
+  ptr = null;
+});
+window.addEventListener('pointercancel', () => { if (ptr) clearTimeout(ptr.timer); ptr = null; });
+
+// --- buttons
+$('#btnUndo').onclick = () => { if (won) return; const h = history.pop(); if (h) { state[h[0]][h[1]] = h[2]; render(); } };
+$('#btnReset').onclick = () => { if (isRandom) loadPuzzle(puzzle, level, true); else loadPuzzle(LEVELS[level], level); };
+$('#btnNext').onclick = nextLevel;
+$('#btnHint').onclick = () => {
+  if (won) return;
+  // 1) falsch gesetzte Glühwürmchen zeigen
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (state[r][c] === 2 && solution[r] !== c) {
+    flash(r, c); $('#msg').textContent = 'Dieses Glühwürmchen gehört nicht hierher.'; return;
+  }
+  // 2) ein fehlendes Glühwürmchen setzen
+  const open = [...Array(N).keys()].filter(r => state[r][solution[r]] !== 2);
+  if (!open.length) return;
+  const r = open[Math.floor(Math.random() * open.length)], c = solution[r];
+  setCell(r, c, 2); hinted.add(r + ',' + c); render(); flash(r, c);
+  if (!won) $('#msg').textContent = 'Hier leuchtet ganz sicher eines ✨';
+};
+function flash(r, c) { const el = cellEl(r, c); el.classList.remove('hintflash'); void el.offsetWidth; el.classList.add('hintflash'); }
+function nextLevel() {
+  $('#win').classList.remove('show');
+  if (isRandom) return loadPuzzle(GlowEngine.generate(N), 0, true);
+  loadPuzzle(LEVELS[(level + 1) % LEVELS.length], (level + 1) % LEVELS.length);
+}
+
+function onWin() {
+  won = true; clearInterval(timerId);
+  const secs = Math.floor((Date.now() - startTime) / 1000);
+  let txt = `Alle ${N} Glühwürmchen leuchten in ${fmt(secs)}.`;
+  if (!isRandom) {
+    store.solved[level] = true;
+    const prev = store.best[level]; if (!prev || secs < prev) { store.best[level] = secs; if (prev) txt += ' Neue Bestzeit!'; }
+    save();
+  }
+  if (hinted.size) txt += ` (${hinted.size} Tipp${hinted.size > 1 ? 's' : ''} benutzt)`;
+  $('#board').classList.add('won');
+  // Glühwürmchen steigen auf
+  const rect = boardEl.getBoundingClientRect();
+  for (let i = 0; i < 40; i++) setTimeout(() => {
+    const p = document.createElement('div'); p.className = 'celebrate';
+    p.style.left = (rect.left + Math.random() * rect.width) + 'px';
+    p.style.top = (rect.top + Math.random() * rect.height) + 'px';
+    p.style.setProperty('--dx', (Math.random() * 160 - 80) + 'px');
+    p.style.setProperty('--dy', (-150 - Math.random() * 250) + 'px');
+    document.body.appendChild(p); setTimeout(() => p.remove(), 2700);
+  }, i * 40);
+  $('#winText').textContent = txt;
+  $('#winFly').innerHTML = `<div class="fly" style="width:100%;height:100%;left:0;top:0">${FLY_SVG}</div>`;
+  $('#winNext').textContent = isRandom ? 'Neues Rätsel ➜' : 'Nächstes Level ➜';
+  setTimeout(() => $('#win').classList.add('show'), 1300);
+}
+
+// --- overlays
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('.overlay').classList.remove('show'));
+$('#btnHelp').onclick = () => $('#help').classList.add('show');
+$('#btnLevels').onclick = openLevels;
+$('#winNext').onclick = nextLevel;
+$('#winLevels').onclick = () => { $('#win').classList.remove('show'); openLevels(); };
+function openLevels() {
+  const g = $('#levelGrid'); g.innerHTML = '';
+  LEVELS.forEach((p, i) => {
+    const b = document.createElement('button');
+    b.className = 'lvl' + (store.solved[i] ? ' done' : '') + (!isRandom && i === level ? ' current' : '');
+    b.innerHTML = `${store.solved[i] ? '✨' : ''}${i + 1}<small>${p.length}×${p.length}${store.best[i] ? ' · ' + fmt(store.best[i]) : ''}</small>`;
+    b.onclick = () => { $('#levelsOv').classList.remove('show'); loadPuzzle(p, i); };
+    g.appendChild(b);
+  });
+  const s = $('#randomSizes'); s.innerHTML = '';
+  [5, 6, 7, 8, 9].forEach(n => {
+    const b = document.createElement('button'); b.className = 'secondary'; b.textContent = `${n}×${n}`;
+    b.onclick = () => { const p = GlowEngine.generate(n); if (p) { $('#levelsOv').classList.remove('show'); loadPuzzle(p, 0, true); } };
+    s.appendChild(b);
+  });
+  $('#levelsOv').classList.add('show');
+}
+window.addEventListener('resize', () => boardEl.style.setProperty('--cs', (boardEl.clientWidth / N) + 'px'));
+
+// --- ambiance
+(function sky() {
+  const sky = $('#sky');
+  for (let i = 0; i < 70; i++) { const s = document.createElement('div'); s.className = 'star';
+    s.style.left = Math.random() * 100 + '%'; s.style.top = Math.random() * 70 + '%'; s.style.animationDelay = (Math.random() * 4) + 's'; sky.appendChild(s); }
+  for (let i = 0; i < 12; i++) { const f = document.createElement('div'); f.className = 'ambient';
+    f.style.left = Math.random() * 100 + '%'; f.style.top = (55 + Math.random() * 40) + '%';
+    f.style.animationDelay = `${-Math.random() * 14}s, ${-Math.random() * 3}s`; f.style.animationDuration = `${10 + Math.random() * 10}s, ${2 + Math.random() * 3}s`;
+    document.body.appendChild(f); }
+})();
+
+const start = Math.min(store.current || 0, LEVELS.length - 1);
+loadPuzzle(LEVELS[start], start);
+if (!store.seenHelp) { $('#help').classList.add('show'); store.seenHelp = true; save(); }
+</script>
+</body>
+</html>
